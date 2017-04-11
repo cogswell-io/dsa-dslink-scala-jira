@@ -1,0 +1,43 @@
+{
+  "name": "dslink-scala-jira",
+  "version": "1.0.0",
+  "description": "JIRA DSLink",
+  "license": "Apache",
+  "author": {
+    "name": "Aviata, Inc.",
+    "email": "support@cogswell.io"
+  },
+  "main": "bin/dslink-scala-jira",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cogswell-io/dsa-dslink-scala-jira"
+  },
+  "bugs": {
+  	"url": "https://github.com/cogswell-io/dsa-dslink-scala-jira/issues"
+  },
+  "configs": {
+    "name": {
+      "type": "string",
+      "default": "jira"
+    },
+    "broker": {
+      "type": "url"
+    },
+    "nodes": {
+      "type": "path",
+      "default": "nodes.json"
+    },
+    "key": {
+      "type": "path",
+      "default": ".key"
+    },
+    "log": {
+      "type": "enum",
+      "default": "debug"
+    },
+    "handler_class": {
+      "type": "string",
+      "default": "com.aviatainc.dslink.jira.Main$"
+    }
+  }
+}
