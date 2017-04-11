@@ -17,7 +17,9 @@ mappings in Universal += file("dslink.json") -> "dslink.json"
 
 libraryDependencies ++= Seq(
   "joda-time" % "joda-time" % "2.9.7",
+  "com.typesafe.play" %% "play-ws" % "2.5.13",
   "com.typesafe.play" %% "play-json" % "2.5.13",
+  "com.google.guava" % "guava" % "21.0",
   "org.iot-dsa" % "dslink" % "0.16.0",
   "org.scaldi" %% "scaldi" % "0.5.8",
   "org.scalatest" %% "scalatest" % "2.2.4" % "test"
