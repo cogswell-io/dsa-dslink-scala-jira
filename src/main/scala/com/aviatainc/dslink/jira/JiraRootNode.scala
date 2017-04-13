@@ -24,7 +24,7 @@ import io.cogswell.dslink.pubsub.model.ActionNodeName
 import io.cogswell.dslink.pubsub.model.ConnectionNodeName
 import io.cogswell.dslink.pubsub.model.LinkNodeName
 import io.cogswell.dslink.pubsub.model.NameKey
-import com.aviatainc.dslink.jira.model.JiraConnectionMetadata
+import com.aviatainc.dslink.jira.model.JiraClientMetadata
 import io.cogswell.dslink.pubsub.services.CogsPubSubService
 import com.aviatainc.dslink.jira.util.ActionParam
 import com.aviatainc.dslink.jira.util.LinkUtils
@@ -33,7 +33,7 @@ import com.aviatainc.dslink.jira.util.StringyException
 case class JiraRootNode() extends LinkNode {
   private val logger = LoggerFactory.getLogger(getClass)
   
-  private val connections = MutableMap[NameKey, JiraConnectionNode]()
+  private val connections = MutableMap[NameKey, JiraClientNode]()
   
   override def linkReady(link: DSLink)(implicit ec: ExecutionContext): Future[Unit] = {
     logger.info("Initializing the root node.")
@@ -42,16 +42,14 @@ case class JiraRootNode() extends LinkNode {
     val rootNode = manager.getSuperRoot
     
     // Connect action
-    val NAME_PARAM = "name"
-    val URL_PARAM = "url"
-    val READ_KEY_PARAM = "read"
-    val WRITE_KEY_PARAM = "write"
+    val USERNAME_PARAM = "name"
+    val PASSWORD_PARAM = "url"
     
     def addConnection(
         name: ConnectionNodeName,
-        metadata: Option[JiraConnectionMetadata]
+        metadata: Option[JiraClientMetadata]
     ): Future[Unit] = {
-      val connection = JiraConnectionNode(rootNode, name, metadata)
+      val connection = JiraClientNode(rootNode, name, metadata)
       connections(name.key) = connection
       
       connection.linkReady(link) andThen {
@@ -63,41 +61,26 @@ case class JiraRootNode() extends LinkNode {
       }
     }
     
-    val connectAction = LinkUtils.action(Seq(
-        ActionParam(NAME_PARAM, ValueType.STRING),
-        ActionParam(URL_PARAM, ValueType.STRING, Some(new Value(CogsPubSubService.defaultUrl))),
-        ActionParam(READ_KEY_PARAM, ValueType.STRING, Some(new Value(""))),
-        ActionParam(WRITE_KEY_PARAM, ValueType.STRING, Some(new Value("")))
+    val addClientAction = LinkUtils.action(Seq(
+        ActionParam(USERNAME_PARAM, ValueType.STRING),
+        ActionParam(PASSWORD_PARAM, ValueType.STRING)
     )) { actionData =>
       val map = actionData.dataMap
       
-      val alias = map(NAME_PARAM).value.map(_.getString).getOrElse("")
-      val url = map(URL_PARAM).value.map(_.getString).filter(!_.isEmpty)
-      val readKey = map(READ_KEY_PARAM).value.map(_.getString).filter(!_.isEmpty)
-      val writeKey = map(WRITE_KEY_PARAM).value.map(_.getString).filter(!_.isEmpty)
-      val name = ConnectionNodeName(alias)
+      val username = map(USERNAME_PARAM).value.map(_.getString).getOrElse("")
+      val password = map(PASSWORD_PARAM).value.map(_.getString).getOrElse("")
       
-      logger.info(s"Add Connection action invoked.")
-      logger.debug(s"'${URL_PARAM}' : ${url}")
-      logger.debug(s"'${READ_KEY_PARAM}' : ${readKey}")
-      logger.debug(s"'${WRITE_KEY_PARAM}' : ${writeKey}")
-      logger.debug(s"'${NAME_PARAM}' : ${alias}")
-      
-      if (connections.keys.toSeq.contains(name)) {
-        throw new IllegalArgumentException(s"Name $alias already in use.")
+      if (username.isEmpty) {
+        throw new IllegalArgumentException("Username must be provided.")
       }
       
-      if (url.isEmpty) {
-        throw new IllegalArgumentException("Url must be provided.")
-      }
-      
-      if (readKey.isEmpty && writeKey.isEmpty) {
-        throw new IllegalArgumentException("At least one key must be provided.");
+      if (password.isEmpty) {
+        throw new IllegalArgumentException("Password must be provided.");
       }
       
       Await.result(
         addConnection(
-            name, Some(JiraConnectionMetadata(readKey, writeKey, url))
+            name, Some(JiraClientMetadata(username, password))
         ) transform({v => v}, {e => new StringyException(e)}),
         Duration(30, TimeUnit.SECONDS)
       )
@@ -107,7 +90,7 @@ case class JiraRootNode() extends LinkNode {
     
     LinkUtils.getOrMakeNode(
         rootNode, ActionNodeName("add-connection", "Add Connection")
-    ) setAction connectAction
+    ) setAction addClientAction
     
     // Synchronize connection nodes with map of nodes.
     {

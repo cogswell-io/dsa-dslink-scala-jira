@@ -1,44 +1,19 @@
 package com.aviatainc.dslink.jira.services
 
-import scala.concurrent.Future
-
 import scala.concurrent.ExecutionContext
-import java.util.UUID
-import io.cogswell.dslink.pubsub.model.PubSubMessage
-import io.cogswell.dslink.pubsub.subscriber.PubSubSubscriber
-import play.api.libs.ws.WS
-import play.api.libs.ws.ning.NingWSClient
+import scala.concurrent.Future
+import scala.util.Failure
+import scala.util.Success
+
+import com.aviatainc.dslink.jira.model.JiraIdentifier
+import com.aviatainc.dslink.jira.model.JiraQueryResult
+import com.aviatainc.dslink.jira.model.NewJiraIssue
+
 import akka.actor.ActorSystem
 import akka.stream.ActorMaterializer
-import play.api.libs.ws.ahc.AhcWSAPI
-import play.api.libs.ws.ahc.AhcWSClient
+import akka.util.ByteString
 import play.api.libs.ws.WSAuthScheme
-import play.api.libs.ws.WSResponse
-import play.api.libs.json._
-
-sealed trait JiraIdentifier
-case class JiraId(val id: Long) extends JiraIdentifier
-case class JiraKey(val key: String) extends JiraIdentifier
-
-/**
- * The definition of a new JIRA issue.
- */
-case class NewJiraIssue(
-    project: JiraIdentifier,
-    summary: String,
-    description: String,
-    issueType: String
-)
-
-/**
- * Represents a JIRA issue.
- */
-case class JiraIssue(
-    project: JiraIdentifier,
-    issue: JiraIdentifier,
-    summary: String,
-    description: String
-)
+import play.api.libs.ws.ahc.AhcWSClient
 
 /**
  * Represents a JIRA query.
@@ -66,14 +41,6 @@ case class JiraClient(
   private implicit val materializer = JiraClient.materializer
   private lazy val wsClient = AhcWSClient()
   
-  private implicit val writesProjectIdentifier = new Writes[JiraIdentifier] {
-    override def write(identifier: JiraIdentifier): JsValue = identifier match {
-      case JiraId(id) => Json.obj("id" -> id)
-      case JiraKey(key) => Json.obj("key" -> key)
-    }
-  }
-  private implicit val writesNewJiraIssue = Json.writes[NewJiraIssue]
-
   /**
    * Clean up resources allocated for interaction with JIRA.
    */
@@ -92,17 +59,29 @@ case class JiraClient(
     .withHeaders(
         ("Content-Type" -> "application/json")
     )
-    .withBody(Json.toJson(issue))
-    .post map { result =>
-      
-      ()
-    }
+    .post(ByteString(issue.toJson.toString))
+    .map(_ => ())
   }
   
   /**
    * Searches for JIRA issues.
    */
-  def findIssues(query: JiraQuery)(implicit ec: ExecutionContext): Future[Seq[JiraIssue]] = {
-    
+  def findIssues(query: JiraQuery)(implicit ec: ExecutionContext): Future[JiraQueryResult] = {
+    wsClient
+    .url(s"${JiraClient.JIRA_BASE_URL}/search?jql=${query}")
+    .withAuth(username, password, WSAuthScheme.BASIC)
+    .withHeaders(
+        ("Content-Type" -> "application/json")
+    )
+    .get()
+    .collect {
+      case result if result.status == 200 => result
+    }
+    .flatMap { result =>
+      JiraQueryResult.parse(result.body) match {
+        case Success(results) => Future.successful(results)
+        case Failure(cause) => Future.failed(cause)
+      }
+    }
   }
 }
