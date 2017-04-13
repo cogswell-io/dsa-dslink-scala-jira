@@ -1,4 +1,4 @@
-package io.cogswell.dslink.pubsub.model
+package com.aviatainc.dslink.jira.model
 
 import scala.collection.immutable.StringOps
 import com.aviatainc.dslink.jira.util.SetOnce
@@ -19,12 +19,12 @@ sealed abstract class LinkNodeName(name: String, prefix: String) {
 }
 
 /**
- * Identifies a connection node.
+ * Identifies a client node.
  */
-case class ConnectionNodeName(
+case class ClientNodeName(
     name: String
-) extends LinkNodeName(name, "connection") {
-  val alias = name
+) extends LinkNodeName(name, "client") {
+  override val alias = name
 }
 
 /**
@@ -71,14 +71,13 @@ object LinkNodeName {
       case (category :: name :: Nil) => Some((category, name))
       case _ => None
     } filter {
-      case (category, name) => (!category.isEmpty) && (!name.isEmpty)
-      case _ => false
-    } map { parts =>
-      val (category, name) = parts
-      (category, name, Option(alias).filter(!_.isEmpty).getOrElse(name))
+      case ("", _) | (_, "") => false
+      case _ => true
+    } collect {
+      case (category, name) => (category, name, Option(alias).filter(!_.isEmpty).getOrElse(name))
     } flatMap {
       case ("action", name, alias) => Some(ActionNodeName(name, alias))
-      case ("connection", name, alias) => Some(ConnectionNodeName(name))
+      case ("client", name, alias) => Some(ClientNodeName(name))
       case ("info", name, alias) => Some(InfoNodeName(name, alias))
       case _ => None
     }

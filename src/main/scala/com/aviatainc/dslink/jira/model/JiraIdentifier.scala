@@ -1,6 +1,5 @@
 package com.aviatainc.dslink.jira.model
 
-import com.aviatainc.dslink.jira.util.JsonTranscoder
 import play.api.libs.json._
 import com.aviatainc.dslink.jira.util.JsonTranscoder
 
@@ -20,14 +19,14 @@ object JiraKey extends JsonTranscoder[JiraKey] {
 
 object JiraIdentifier extends JsonTranscoder[JiraIdentifier] {
   override implicit val writes = new Writes[JiraIdentifier] {
-    override def write(identifier: JiraIdentifier): JsValue = identifier match {
+    override def writes(identifier: JiraIdentifier): JsValue = identifier match {
       case JiraId(id) => Json.obj("id" -> id)
       case JiraKey(key) => Json.obj("key" -> key)
     }
   }
 
   override implicit val reads = new Reads[JiraIdentifier] {
-    override def read(json: JsValue): JsResult[JiraIdentifier] = {
+    override def reads(json: JsValue): JsResult[JiraIdentifier] = {
       (json \ "id").toOption.collect[JiraIdentifier] {
         case id:JsNumber => JiraId(id.value.longValue)
       } orElse {

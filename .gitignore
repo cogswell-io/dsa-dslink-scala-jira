@@ -8,5 +8,6 @@
 /.settings/
 /deploy/
 /.cache-*
+/bin/com
 /bin/io
 /bin/*.class

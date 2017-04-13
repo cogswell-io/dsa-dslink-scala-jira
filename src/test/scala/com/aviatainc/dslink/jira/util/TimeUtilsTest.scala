@@ -1,9 +1,8 @@
-package com.aviata.dslink.jira.util
+package com.aviatainc.dslink.jira.util
 
-import com.aviata.dslink.jira.DslinkTest
 import java.time.Instant
 import org.joda.time.DateTime
-import com.aviatainc.dslink.jira.util.TimeUtils
+import com.aviatainc.dslink.jira.DslinkTest
 
 class TimeUtilsTest extends DslinkTest() {
   "TimeUtils" should "correctly convert the epoch to a DateTime" in {

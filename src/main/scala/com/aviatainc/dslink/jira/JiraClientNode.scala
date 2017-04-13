@@ -1,14 +1,7 @@
 package com.aviatainc.dslink.jira
 
-import java.net.ConnectException
-import java.util.concurrent.TimeUnit
-
-import scala.collection.JavaConversions._
-import scala.collection.mutable.{ Map => MutableMap }
-import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.concurrent.duration.Duration
 import scala.util.Failure
 import scala.util.Success
 
@@ -18,30 +11,22 @@ import org.dsa.iot.dslink.node.value.Value
 import org.dsa.iot.dslink.node.value.ValueType
 import org.slf4j.LoggerFactory
 
-import io.cogswell.dslink.pubsub.model.PubSubOptions
+import com.aviatainc.dslink.jira.model.ActionNodeName
+import com.aviatainc.dslink.jira.model.ClientNodeName
+import com.aviatainc.dslink.jira.model.InfoNodeName
 import com.aviatainc.dslink.jira.model.JiraClientMetadata
-import io.cogswell.dslink.pubsub.model.NameKey
-import com.aviatainc.dslink.jira.services.Services
-import io.cogswell.dslink.pubsub.util.ActionParam
-import io.cogswell.dslink.pubsub.util.LinkUtils
-import io.cogswell.dslink.pubsub.util.StringyException
-import io.cogswell.dslink.pubsub.model.LinkNodeName
-import io.cogswell.dslink.pubsub.model.ConnectionNodeName
-import io.cogswell.dslink.pubsub.model.InfoNodeName
-import io.cogswell.dslink.pubsub.model.ActionNodeName
-import io.cogswell.dslink.pubsub.model.PublisherNodeName
-import io.cogswell.dslink.pubsub.model.SubscriberNodeName
-import org.slf4j.Marker
-import com.aviatainc.dslink.jira.services.JiraClient
-import com.aviatainc.dslink.jira.model.JiraKey
 import com.aviatainc.dslink.jira.model.JiraId
-import com.aviatainc.dslink.jira.services.JiraQuery
 import com.aviatainc.dslink.jira.model.JiraIdentifier
+import com.aviatainc.dslink.jira.model.JiraKey
 import com.aviatainc.dslink.jira.model.NewJiraIssue
+import com.aviatainc.dslink.jira.services.JiraClient
+import com.aviatainc.dslink.jira.services.JiraQuery
+import com.aviatainc.dslink.jira.util.ActionParam
+import com.aviatainc.dslink.jira.util.LinkUtils
 
 case class JiraClientNode(
     parentNode: Node,
-    clientName: ConnectionNodeName,
+    clientName: ClientNodeName,
     metadata: Option[JiraClientMetadata] = None
 )(implicit ec: ExecutionContext) extends LinkNode {
   private var client: Option[JiraClient] = None
@@ -60,22 +45,22 @@ case class JiraClientNode(
   }
   
   private def getMetadata(): Option[JiraClientMetadata] = {
-    logger.debug(s"Fetching metadata for connection ${clientName}")
+    logger.debug(s"Fetching metadata for client ${clientName}")
     
     clientNode flatMap {
       LinkUtils.getChildNode(_, METADATA_NODE_NAME)
     } flatMap { child =>
       Option(child.getValue().getString)
     } flatMap { json =>
-      logger.debug(s"Metadata for the connection: $json")
+      logger.debug(s"Metadata for the client: $json")
       
       JiraClientMetadata.parse(json) match {
         case Success(md) => {
-          logger.debug(s"Fetched metadata for connection ${clientName}: $md")
+          logger.debug(s"Fetched metadata for client ${clientName}: $md")
           Some(md)
         }
         case Failure(error) => {
-          logger.error(s"Failed to parse metadata for connection ${clientName}:", error)
+          logger.error(s"Failed to parse metadata for client ${clientName}:", error)
           None
         }
       }
@@ -83,7 +68,7 @@ case class JiraClientNode(
   }
   
   private def setMetadata(metadata: JiraClientMetadata): Unit = {
-    logger.debug(s"Setting metadata for connection ${clientName}: $metadata")
+    logger.debug(s"Setting metadata for client ${clientName}: $metadata")
     
     clientNode foreach { node =>
       LinkUtils.getOrMakeNode(node, METADATA_NODE_NAME, Some { builder =>
@@ -106,7 +91,7 @@ case class JiraClientNode(
     clientNode = Option(LinkUtils.getOrMakeNode(parentNode, clientName))
     
     clientMetadata foreach { metadata =>
-      logger.info(s"Writing connection metadata: $clientMetadata")
+      logger.info(s"Writing client metadata: $clientMetadata")
       setMetadata(metadata)
     }
     
@@ -188,19 +173,5 @@ case class JiraClientNode(
   def destroy(): Unit = {
     client.foreach(_.disconnect())
     clientNode.foreach(parentNode.removeChild(_))
-  }
-  
-  def connect()(implicit ec: ExecutionContext): Future[Unit] = {
-    val keys = clientMetadata.fold(Seq.empty[String]) { m =>
-      Seq(m.readKey, m.writeKey) collect { case Some(key) => key }
-    }
-    
-    Services.pubSubService.connect(keys, Some(connectionOptions)) map { conn =>
-      logger.info("Connected to the pub/sub service.")
-      
-      setStatus("Connected")
-      connection = Some(conn)
-      ()
-    }
   }
 }

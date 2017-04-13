@@ -7,8 +7,6 @@ import org.scalatest.Matchers
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.Nanoseconds
 import org.scalatest.time.Span
-import com.aviatainc.dslink.jira.services.Services
-import com.aviatainc.dslink.jira.services.ServicesModule
 import scaldi.Injector
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
@@ -25,9 +23,6 @@ abstract class DslinkTest(
     timeout: Duration = Duration(10, TimeUnit.SECONDS),
     interval: Duration = Duration(100, TimeUnit.MILLISECONDS)
 ) extends FlatSpec with Matchers with ScalaFutures {
-  ServicesModule.setTestMode()
-
-  implicit val inj: Injector = Services.serviceInjector
   implicit val ec: ExecutionContext = globalEC
 
   /**

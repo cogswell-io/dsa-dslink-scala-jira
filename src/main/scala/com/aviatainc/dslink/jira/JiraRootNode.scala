@@ -20,15 +20,14 @@ import org.dsa.iot.dslink.node.value.Value
 import org.dsa.iot.dslink.node.value.ValueType
 import org.slf4j.LoggerFactory
 
-import io.cogswell.dslink.pubsub.model.ActionNodeName
-import io.cogswell.dslink.pubsub.model.ConnectionNodeName
-import io.cogswell.dslink.pubsub.model.LinkNodeName
-import io.cogswell.dslink.pubsub.model.NameKey
 import com.aviatainc.dslink.jira.model.JiraClientMetadata
-import io.cogswell.dslink.pubsub.services.CogsPubSubService
 import com.aviatainc.dslink.jira.util.ActionParam
 import com.aviatainc.dslink.jira.util.LinkUtils
 import com.aviatainc.dslink.jira.util.StringyException
+import com.aviatainc.dslink.jira.model.ClientNodeName
+import com.aviatainc.dslink.jira.model.NameKey
+import com.aviatainc.dslink.jira.model.ActionNodeName
+import com.aviatainc.dslink.jira.model.LinkNodeName
 
 case class JiraRootNode() extends LinkNode {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -45,8 +44,8 @@ case class JiraRootNode() extends LinkNode {
     val USERNAME_PARAM = "name"
     val PASSWORD_PARAM = "url"
     
-    def addConnection(
-        name: ConnectionNodeName,
+    def addClient(
+        name: ClientNodeName,
         metadata: Option[JiraClientMetadata]
     ): Future[Unit] = {
       val connection = JiraClientNode(rootNode, name, metadata)
@@ -79,8 +78,8 @@ case class JiraRootNode() extends LinkNode {
       }
       
       Await.result(
-        addConnection(
-            name, Some(JiraClientMetadata(username, password))
+        addClient(
+            ClientNodeName(username), Some(JiraClientMetadata(username, password))
         ) transform({v => v}, {e => new StringyException(e)}),
         Duration(30, TimeUnit.SECONDS)
       )
@@ -100,7 +99,7 @@ case class JiraRootNode() extends LinkNode {
         (nodeId, LinkNodeName.fromNodeId(nodeId))
       } map {
         // We are only interested in connection nodes
-        case (_, Some(name: ConnectionNodeName)) => {
+        case (_, Some(name: ClientNodeName)) => {
           logger.info(s"Connection node found: $name")
           Some(name.key)
         }
@@ -124,7 +123,7 @@ case class JiraRootNode() extends LinkNode {
         case (key, true, false) => {
           logger.info(s"Adding node found in link, but not in map: ${key.name}")
           key.name match {
-            case connectionName: ConnectionNodeName => addConnection(connectionName, None)
+            case clientName: ClientNodeName => addClient(clientName, None)
             case _ => logger.warn(s"Whoops! Attempting to add non-connection node: ${key.name}")
           }
         }

@@ -19,6 +19,6 @@ case class JiraClientMetadata(
 }
 
 object JiraClientMetadata extends JsonTranscoder[JiraClientMetadata] {
-  override def writes = Json.writes[JiraClientMetadata]
-  override def reads = Json.reads[JiraClientMetadata]
+  override implicit val writes = Json.writes[JiraClientMetadata]
+  override implicit val reads = Json.reads[JiraClientMetadata]
 }

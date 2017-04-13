@@ -15,9 +15,9 @@ import org.dsa.iot.dslink.DSLink
 import org.dsa.iot.dslink.node.Node
 import org.dsa.iot.dslink.methods.requests.ListRequest
 import org.dsa.iot.dslink.node.NodeBuilder
-import io.cogswell.dslink.pubsub.model.LinkNodeName
 import java.net.URLDecoder
 import java.net.URLEncoder
+import com.aviatainc.dslink.jira.model.LinkNodeName
 
 /**
  * Class representing a parameter attached to an Action.
