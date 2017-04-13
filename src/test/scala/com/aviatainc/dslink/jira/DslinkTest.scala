@@ -7,7 +7,6 @@ import org.scalatest.Matchers
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.Nanoseconds
 import org.scalatest.time.Span
-import scaldi.Injector
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
 import scala.annotation.implicitNotFound

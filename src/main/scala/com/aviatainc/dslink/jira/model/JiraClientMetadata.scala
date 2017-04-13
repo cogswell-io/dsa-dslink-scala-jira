@@ -13,7 +13,9 @@ import com.aviatainc.dslink.jira.util.JsonTranscoder
  */
 case class JiraClientMetadata(
     username: String,
-    password: String
+    password: String,
+    organization: Option[String],
+    url: Option[String]
 ) {
   def toJson: JsValue = JiraClientMetadata.toJson(this)
 }

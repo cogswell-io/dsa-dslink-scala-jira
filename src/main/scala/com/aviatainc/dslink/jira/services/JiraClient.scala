@@ -9,11 +9,11 @@ import com.aviatainc.dslink.jira.model.JiraIdentifier
 import com.aviatainc.dslink.jira.model.JiraQueryResult
 import com.aviatainc.dslink.jira.model.NewJiraIssue
 
-import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
-import akka.util.ByteString
-import play.api.libs.ws.WSAuthScheme
-import play.api.libs.ws.ahc.AhcWSClient
+import javax.xml.bind.DatatypeConverter
+import java.nio.charset.Charset
+import scalaj.http.Http
+import scala.util.Try
+import org.slf4j.LoggerFactory
 
 /**
  * Represents a JIRA query.
@@ -24,10 +24,7 @@ case class JiraQuery(
 )
 
 object JiraClient {
-  private implicit lazy val system = ActorSystem()
-  private implicit lazy val materializer = ActorMaterializer()
-  
-  val JIRA_BASE_URL = "https://aviatainc.atlassian.net/rest/api/2"
+  val UTF_8 = Charset.forName("utf-8")
 }
 
 /**
@@ -35,53 +32,80 @@ object JiraClient {
  */
 case class JiraClient(
     username: String,
-    password: String
+    password: String,
+    organization: Option[String] = Some("aviatainc"),
+    url: Option[String] = None
 )(implicit ec: ExecutionContext) {
-  private implicit val system = JiraClient.system
-  private implicit val materializer = JiraClient.materializer
-  private lazy val wsClient = AhcWSClient()
+  private val logger = LoggerFactory.getLogger(getClass)
+
+  type HttpHeader = (String, String)
   
-  /**
-   * Clean up resources allocated for interaction with JIRA.
-   */
-  def disconnect()(implicit ec: ExecutionContext): Future[Unit] = {
-    wsClient.close()
-    Future.successful(())
+  private def baseUrl = url.orElse(
+      organization map { org => s"https://${org}.atlassian.net/rest/api/2" }
+  ).get
+
+  private def contentJson: HttpHeader = ("Content-Type", "application/json")
+  private def acceptJson: HttpHeader = ("Accept", "application/json")
+  private def basicAuth: HttpHeader = {
+    val cred = s"$username:$password"
+    val credB64 = DatatypeConverter.printBase64Binary(cred.getBytes(JiraClient.UTF_8))
+    ("Authorization", s"Basic $credB64")
   }
+  
+  private def jiraResult(json: String): Try[JiraQueryResult] = JiraQueryResult.parse(json)
 
   /**
    * Creates a new JIRA issue.
    */
-  def createIssue(issue: NewJiraIssue)(implicit ec: ExecutionContext): Future[Unit] = {
-    wsClient
-    .url(s"${JiraClient.JIRA_BASE_URL}/issue/")
-    .withAuth(username, password, WSAuthScheme.BASIC)
-    .withHeaders(
-        ("Content-Type" -> "application/json")
-    )
-    .post(ByteString(issue.toJson.toString))
-    .map(_ => ())
+  def createIssue(issue: NewJiraIssue)(implicit ec: ExecutionContext): Future[Either[(Int, String), String]] = {
+    Future {
+      val url = s"${baseUrl}/issue/createmeta"
+      
+      logger.info(s"[JIRA-Create-Issue] POST $url")
+      
+      Http(url)
+      .headers(Seq(
+          basicAuth,
+          contentJson
+      ))
+      .method("POST")
+      .postData(issue.toJson.toString)
+      .asString
+    } map { response =>
+      response.code match {
+        case 200 => Right(response.body)
+        case code => Left((code, response.body))
+      }
+    } andThen {
+      case Success(result) => logger.info(s"[JIRA-Create-Issue] result: $result")
+      case Failure(error) => logger.error("[JIRA-Create-Issue] error:", error)
+    }
   }
   
   /**
    * Searches for JIRA issues.
    */
-  def findIssues(query: JiraQuery)(implicit ec: ExecutionContext): Future[JiraQueryResult] = {
-    wsClient
-    .url(s"${JiraClient.JIRA_BASE_URL}/search?jql=${query}")
-    .withAuth(username, password, WSAuthScheme.BASIC)
-    .withHeaders(
-        ("Content-Type" -> "application/json")
-    )
-    .get()
-    .collect {
-      case result if result.status == 200 => result
-    }
-    .flatMap { result =>
-      JiraQueryResult.parse(result.body) match {
-        case Success(results) => Future.successful(results)
-        case Failure(cause) => Future.failed(cause)
+  def findIssues(query: JiraQuery)(implicit ec: ExecutionContext): Future[Either[(Int, String), JiraQueryResult]] = {
+    Future {
+      val url = s"${baseUrl}/search?jql=${query.query}"
+      
+      logger.info(s"[JIRA-Query] GET $url")
+      
+      Http(url)
+      .headers(Seq(
+          basicAuth,
+          acceptJson
+      ))
+      .method("GET")
+      .asString
+    } flatMap { response =>
+      response.code match {
+        case 200 => Future.fromTry(jiraResult(response.body)).map(Right(_))
+        case code => Future.successful(Left((code, response.body)))
       }
+    } andThen {
+      case Success(result) => logger.info(s"[JIRA-Query] result: $result")
+      case Failure(error) => logger.info("[JIRA-Query] error:", error)
     }
   }
 }

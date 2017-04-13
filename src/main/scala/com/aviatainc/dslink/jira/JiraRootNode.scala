@@ -32,7 +32,7 @@ import com.aviatainc.dslink.jira.model.LinkNodeName
 case class JiraRootNode() extends LinkNode {
   private val logger = LoggerFactory.getLogger(getClass)
   
-  private val connections = MutableMap[NameKey, JiraClientNode]()
+  private val clients = MutableMap[NameKey, JiraClientNode]()
   
   override def linkReady(link: DSLink)(implicit ec: ExecutionContext): Future[Unit] = {
     logger.info("Initializing the root node.")
@@ -41,15 +41,17 @@ case class JiraRootNode() extends LinkNode {
     val rootNode = manager.getSuperRoot
     
     // Connect action
-    val USERNAME_PARAM = "name"
-    val PASSWORD_PARAM = "url"
+    val USERNAME_PARAM = "username"
+    val PASSWORD_PARAM = "password"
+    val ORG_PARAM = "organization"
+    val URL_PARAM = "base-url"
     
     def addClient(
         name: ClientNodeName,
         metadata: Option[JiraClientMetadata]
     ): Future[Unit] = {
       val connection = JiraClientNode(rootNode, name, metadata)
-      connections(name.key) = connection
+      clients(name.key) = connection
       
       connection.linkReady(link) andThen {
         case Success(_) => logger.info("Connected to the Pub/Sub service.")
@@ -62,12 +64,16 @@ case class JiraRootNode() extends LinkNode {
     
     val addClientAction = LinkUtils.action(Seq(
         ActionParam(USERNAME_PARAM, ValueType.STRING),
-        ActionParam(PASSWORD_PARAM, ValueType.STRING)
+        ActionParam(PASSWORD_PARAM, ValueType.STRING),
+        ActionParam(ORG_PARAM, ValueType.STRING, Some(new Value(""))),
+        ActionParam(URL_PARAM, ValueType.STRING, Some(new Value("")))
     )) { actionData =>
       val map = actionData.dataMap
       
-      val username = map(USERNAME_PARAM).value.map(_.getString).getOrElse("")
-      val password = map(PASSWORD_PARAM).value.map(_.getString).getOrElse("")
+      val username = stringParam(map)(USERNAME_PARAM).getOrElse("")
+      val password = stringParam(map)(PASSWORD_PARAM).getOrElse("")
+      val org = stringParam(map)(ORG_PARAM).filter(!_.isEmpty)
+      val url = stringParam(map)(URL_PARAM).filter(!_.isEmpty)
       
       if (username.isEmpty) {
         throw new IllegalArgumentException("Username must be provided.")
@@ -79,16 +85,16 @@ case class JiraRootNode() extends LinkNode {
       
       Await.result(
         addClient(
-            ClientNodeName(username), Some(JiraClientMetadata(username, password))
+            ClientNodeName(username), Some(JiraClientMetadata(username, password, org, url))
         ) transform({v => v}, {e => new StringyException(e)}),
         Duration(30, TimeUnit.SECONDS)
       )
       
-      logger.info("Connection node should now exist")
+      logger.info("Client node should now exist")
     }
     
     LinkUtils.getOrMakeNode(
-        rootNode, ActionNodeName("add-connection", "Add Connection")
+        rootNode, ActionNodeName("add-client", "Add Client")
     ) setAction addClientAction
     
     // Synchronize connection nodes with map of nodes.
@@ -100,11 +106,11 @@ case class JiraRootNode() extends LinkNode {
       } map {
         // We are only interested in connection nodes
         case (_, Some(name: ClientNodeName)) => {
-          logger.info(s"Connection node found: $name")
+          logger.info(s"client node found: $name")
           Some(name.key)
         }
         case (_, Some(name)) => {
-          logger.info(s"Non-connection node found: $name")
+          logger.info(s"Non-client node found: $name")
           None
         }
         case (nodeId, _) => {
@@ -113,12 +119,12 @@ case class JiraRootNode() extends LinkNode {
         }
       } filter { _.isDefined } map { _.get }
       
-      (nodeKeys ++ connections.keySet) map { key =>
-        (key, nodeKeys.contains(key), connections.containsKey(key))
+      (nodeKeys ++ clients.keySet) map { key =>
+        (key, nodeKeys.contains(key), clients.containsKey(key))
       } foreach {
         case (key, false, true) => {
           logger.info(s"Removing node found in map, but not in link: ${key.name}")
-          connections.remove(key) foreach { _.destroy() }
+          clients.remove(key) foreach { _.destroy() }
         }
         case (key, true, false) => {
           logger.info(s"Adding node found in link, but not in map: ${key.name}")
@@ -129,7 +135,7 @@ case class JiraRootNode() extends LinkNode {
         }
         case (key, true, true) => {
           logger.info(s"Re-initializing node on link ready: ${key.name}")
-          connections(key).linkReady(link)
+          clients(key).linkReady(link)
         }
         case (key, false, false) => logger.warn(s"Node not found in link or map: ${key.name}")
       }

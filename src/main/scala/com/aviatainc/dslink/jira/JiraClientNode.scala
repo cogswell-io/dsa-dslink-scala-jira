@@ -81,7 +81,6 @@ case class JiraClientNode(
   override def linkReady(link: DSLink)(implicit ec: ExecutionContext): Future[Unit] = {
     logger.info(s"Initializing client ${clientName}")
     
-    val PROJECT_ID_PARAM = "project-id"
     val PROJECT_KEY_PARAM = "project-key"
     val SUMMARY_PARAM = "summary"
     val DESCRIPTION_PARAM = "description"
@@ -103,37 +102,26 @@ case class JiraClientNode(
         destroy()
       })
       
-      def projectIdentifier(map: Map[String, ActionParam]): Option[JiraIdentifier] = {
-        map(PROJECT_ID_PARAM).value.map { id =>
-          JiraId(id.getNumber.longValue)
-        } orElse {
-          map(PROJECT_KEY_PARAM).value.map { key =>
-            JiraKey(key.getString)
-          }
-        }
-      }
-        
       // Subscribe action node
       LinkUtils.getOrMakeNode(cNode, ActionNodeName("create-issue", "Create Issue"))
       .setAction(LinkUtils.action(Seq(
-          ActionParam(PROJECT_ID_PARAM, ValueType.NUMBER),
-          ActionParam(PROJECT_KEY_PARAM, ValueType.STRING),
+          ActionParam(PROJECT_KEY_PARAM, ValueType.STRING, Some(new Value(""))),
           ActionParam(SUMMARY_PARAM, ValueType.STRING),
           ActionParam(DESCRIPTION_PARAM, ValueType.STRING)
       )) { actionData =>
         val map = actionData.dataMap
         
-        projectIdentifier(map) flatMap { identifier =>
+        jiraKeyParam(map)(PROJECT_KEY_PARAM) flatMap { key =>
           (
-            map(SUMMARY_PARAM).value.map(_.getString),
-            map(DESCRIPTION_PARAM).value.map(_.getString)
+            stringParam(map)(SUMMARY_PARAM),
+            stringParam(map)(DESCRIPTION_PARAM)
           ) match {
-            case (Some(summary), Some(description)) => Some(identifier, summary, description)
+            case (Some(summary), Some(description)) => Some(key, summary, description)
             case _ => None
           }
         } match {
-          case Some((identifier, summary, description)) => client map {
-            _.createIssue(NewJiraIssue(identifier, summary, description, "Task"))
+          case Some((key, summary, description)) => client map {
+            _.createIssue(NewJiraIssue(key, summary, description, "Task"))
           }
           case None => {
             val message = "Missing a required parameter."
@@ -146,18 +134,17 @@ case class JiraClientNode(
       // Publisher action node
       LinkUtils.getOrMakeNode(cNode, ActionNodeName("find-issues", "Find Issues"))
       .setAction(LinkUtils.action(Seq(
-          ActionParam(PROJECT_ID_PARAM, ValueType.NUMBER),
-          ActionParam(PROJECT_KEY_PARAM, ValueType.STRING),
+          ActionParam(PROJECT_KEY_PARAM, ValueType.STRING, Some(new Value(""))),
           ActionParam(QUERY_PARAM, ValueType.STRING)
       )) { actionData =>
         val map = actionData.dataMap
 
-        projectIdentifier(map) flatMap { identifier =>
-          map(QUERY_PARAM).value map { query =>
-            (identifier, query.getString)
+        jiraKeyParam(map)(PROJECT_KEY_PARAM) flatMap { key =>
+          stringParam(map)(QUERY_PARAM) map { query =>
+            (key, query)
           }
         } match {
-          case Some((identifier, query)) => client.map(c => c.findIssues(JiraQuery(identifier, query)))
+          case Some((key, query)) => client.map(c => c.findIssues(JiraQuery(key, query)))
           case None => {
             val message = "Missing a required parameter."
             logger.warn(message)
@@ -167,11 +154,17 @@ case class JiraClientNode(
       })
     }
     
+    client = clientMetadata.map { md =>
+      JiraClient(
+          md.username, md.password,
+          md.organization, md.url
+      )
+    }
+    
     Future.successful(())
   }
   
   def destroy(): Unit = {
-    client.foreach(_.disconnect())
     clientNode.foreach(parentNode.removeChild(_))
   }
 }
