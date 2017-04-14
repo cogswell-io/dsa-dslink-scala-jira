@@ -136,8 +136,8 @@ case class JiraClientNode(
       .setAction(LinkUtils.action(Seq(
           ActionParam(QUERY_PARAM, ValueType.STRING),
           ActionParam(FIELDS_PARAM, ValueType.STRING, Some(new Value(""))),
-          ActionParam(LIMIT_PARAM, ValueType.STRING, Some(new Value(10))),
-          ActionParam(OFFSET_PARAM, ValueType.STRING, Some(new Value(0)))
+          ActionParam(LIMIT_PARAM, ValueType.NUMBER, Some(new Value(10))),
+          ActionParam(OFFSET_PARAM, ValueType.NUMBER, Some(new Value(0)))
       )) { actionData =>
         val map = actionData.dataMap
 
