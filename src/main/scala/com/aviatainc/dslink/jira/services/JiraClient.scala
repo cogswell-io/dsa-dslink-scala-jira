@@ -75,7 +75,7 @@ case class JiraClient(
    */
   def createIssue(issue: NewJiraIssue)(implicit ec: ExecutionContext): Future[Either[(Int, String), String]] = {
     Future {
-      val url = s"${baseUrl}/issue/createmeta"
+      val url = s"${baseUrl}/issue/"
       val data = issue.toJson.toString
       
       logger.info(s"[JIRA-Create-Issue] POST $url\n$data")
@@ -86,8 +86,8 @@ case class JiraClient(
           acceptJson,
           contentJson
       ))
-      .method("POST")
       .postData(data)
+      .method("POST")
       .asString
     } map { response =>
       response.code match {

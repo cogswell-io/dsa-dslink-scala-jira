@@ -6,11 +6,14 @@ import scala.util.Try
 import scala.util.Failure
 import scala.util.Success
 
-trait JsonTranscoder[T] {
+trait JsonEncoder[T] {
   def writes: Writes[T]
-  def reads: Reads[T]
   
   def toJson(record: T): JsValue = Json.toJson(record)(writes)
+}
+
+trait JsonDecoder[T] {
+  def reads: Reads[T]
   
   def fromJson(json: JsValue): Try[T] = {
     Json.fromJson[T](json)(reads) match {
@@ -23,3 +26,5 @@ trait JsonTranscoder[T] {
     JsonUtils.parse(jsonText) flatMap (fromJson(_))
   }
 }
+
+trait JsonTranscoder[T] extends JsonEncoder[T] with JsonDecoder[T]

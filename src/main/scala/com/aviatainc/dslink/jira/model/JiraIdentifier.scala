@@ -3,7 +3,9 @@ package com.aviatainc.dslink.jira.model
 import play.api.libs.json._
 import com.aviatainc.dslink.jira.util.JsonTranscoder
 
-sealed trait JiraIdentifier
+sealed trait JiraIdentifier {
+  def toJson: JsValue = JiraIdentifier toJson this
+}
 case class JiraId(val id: Long) extends JiraIdentifier
 case class JiraKey(val key: String) extends JiraIdentifier
 

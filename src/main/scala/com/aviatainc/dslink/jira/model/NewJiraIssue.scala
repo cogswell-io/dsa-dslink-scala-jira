@@ -3,6 +3,7 @@ package com.aviatainc.dslink.jira.model
 import com.aviatainc.dslink.jira.util.JsonTranscoder
 
 import play.api.libs.json._
+import com.aviatainc.dslink.jira.util.JsonEncoder
 
 /**
  * The definition of a new JIRA issue.
@@ -16,7 +17,19 @@ case class NewJiraIssue(
   def toJson: JsValue = NewJiraIssue toJson this
 }
 
-object NewJiraIssue extends JsonTranscoder[NewJiraIssue] {
-  override implicit val writes = Json.writes[NewJiraIssue]
-  override implicit val reads = Json.reads[NewJiraIssue]
+object NewJiraIssue extends JsonEncoder[NewJiraIssue] {
+  override implicit val writes = new Writes[NewJiraIssue] {
+    override def writes(issue: NewJiraIssue): JsValue = {
+      Json.obj(
+        "fields" -> Json.obj(
+          "project" -> issue.project.toJson,
+          "summary" -> issue.summary,
+          "description" -> issue.description,
+          "issuetype" -> Json.obj(
+            "name" -> issue.issueType
+          )
+        )
+      )
+    }
+  }
 }
