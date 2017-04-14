@@ -49,7 +49,7 @@ case class ActionData(
 ) {
   val dataMap: Map[String, ActionParam] = params.map {
     case ActionParam(name, valueType, value) =>
-      val resultValue = Option(result.getParameter(name, valueType))
+      val resultValue = Option(result.getParameter(name, valueType)).orElse(value)
       (name -> ActionParam(name, valueType, resultValue))
   } toMap
 }

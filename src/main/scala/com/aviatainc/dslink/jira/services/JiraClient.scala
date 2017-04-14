@@ -14,14 +14,30 @@ import java.nio.charset.Charset
 import scalaj.http.Http
 import scala.util.Try
 import org.slf4j.LoggerFactory
+import play.api.libs.json._
 
 /**
  * Represents a JIRA query.
  */
 case class JiraQuery(
-    project: JiraIdentifier,
-    query: String
-)
+    query: String,
+    fields: Option[Seq[String]],
+    limit: Option[Int],
+    offset: Option[Int]
+) {
+  private def params: Seq[(String, JsValue)] = {
+    Seq(
+      Some(("jql" -> JsString(query))),
+      fields.map(fs => ("fields" -> JsArray(fs.map(JsString(_))))),
+      offset.map(("startAt" -> JsNumber(_))),
+      limit.map(("maxResults" -> JsNumber(_)))
+    ) collect {
+      case Some(tuple) => tuple
+    }
+  }
+
+  def toJson: JsValue = JsObject(params)
+}
 
 object JiraClient {
   val UTF_8 = Charset.forName("utf-8")
@@ -60,16 +76,18 @@ case class JiraClient(
   def createIssue(issue: NewJiraIssue)(implicit ec: ExecutionContext): Future[Either[(Int, String), String]] = {
     Future {
       val url = s"${baseUrl}/issue/createmeta"
+      val data = issue.toJson.toString
       
-      logger.info(s"[JIRA-Create-Issue] POST $url")
+      logger.info(s"[JIRA-Create-Issue] POST $url\n$data")
       
       Http(url)
       .headers(Seq(
           basicAuth,
+          acceptJson,
           contentJson
       ))
       .method("POST")
-      .postData(issue.toJson.toString)
+      .postData(data)
       .asString
     } map { response =>
       response.code match {
@@ -85,23 +103,26 @@ case class JiraClient(
   /**
    * Searches for JIRA issues.
    */
-  def findIssues(query: JiraQuery)(implicit ec: ExecutionContext): Future[Either[(Int, String), JiraQueryResult]] = {
+  def findIssues(query: JiraQuery)(implicit ec: ExecutionContext): Future[Either[(Int, String), String]] = {
     Future {
-      val url = s"${baseUrl}/search?jql=${query.query}"
+      val url = s"${baseUrl}/search"
+      val data = query.toJson.toString
       
-      logger.info(s"[JIRA-Query] GET $url")
+      logger.info(s"[JIRA-Query] POST $url\n$data")
       
       Http(url)
       .headers(Seq(
           basicAuth,
-          acceptJson
+          acceptJson,
+          contentJson
       ))
-      .method("GET")
+      .postData(data)
+      .method("POST")
       .asString
-    } flatMap { response =>
+    } map { response =>
       response.code match {
-        case 200 => Future.fromTry(jiraResult(response.body)).map(Right(_))
-        case code => Future.successful(Left((code, response.body)))
+        case 200 => Right(response.body)
+        case code => Left((code, response.body))
       }
     } andThen {
       case Success(result) => logger.info(s"[JIRA-Query] result: $result")

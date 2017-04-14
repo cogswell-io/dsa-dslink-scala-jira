@@ -84,7 +84,11 @@ case class JiraClientNode(
     val PROJECT_KEY_PARAM = "project-key"
     val SUMMARY_PARAM = "summary"
     val DESCRIPTION_PARAM = "description"
+
     val QUERY_PARAM = "query"
+    val FIELDS_PARAM = "fields"
+    val OFFSET_PARAM = "offset"
+    val LIMIT_PARAM = "limit"
     
     // Client node
     clientNode = Option(LinkUtils.getOrMakeNode(parentNode, clientName))
@@ -105,25 +109,21 @@ case class JiraClientNode(
       // Subscribe action node
       LinkUtils.getOrMakeNode(cNode, ActionNodeName("create-issue", "Create Issue"))
       .setAction(LinkUtils.action(Seq(
-          ActionParam(PROJECT_KEY_PARAM, ValueType.STRING, Some(new Value(""))),
+          ActionParam(PROJECT_KEY_PARAM, ValueType.STRING),
           ActionParam(SUMMARY_PARAM, ValueType.STRING),
           ActionParam(DESCRIPTION_PARAM, ValueType.STRING)
       )) { actionData =>
         val map = actionData.dataMap
         
-        jiraKeyParam(map)(PROJECT_KEY_PARAM) flatMap { key =>
-          (
-            stringParam(map)(SUMMARY_PARAM),
-            stringParam(map)(DESCRIPTION_PARAM)
-          ) match {
-            case (Some(summary), Some(description)) => Some(key, summary, description)
-            case _ => None
-          }
-        } match {
-          case Some((key, summary, description)) => client map {
+        (
+          jiraKeyParam(map)(PROJECT_KEY_PARAM),
+          stringParam(map)(SUMMARY_PARAM),
+          stringParam(map)(DESCRIPTION_PARAM)
+        ) match {
+          case (Some(key), Some(summary), Some(description)) => client map {
             _.createIssue(NewJiraIssue(key, summary, description, "Task"))
           }
-          case None => {
+          case _ => {
             val message = "Missing a required parameter."
             logger.warn(message)
             throw new IllegalArgumentException(message)
@@ -134,19 +134,28 @@ case class JiraClientNode(
       // Publisher action node
       LinkUtils.getOrMakeNode(cNode, ActionNodeName("find-issues", "Find Issues"))
       .setAction(LinkUtils.action(Seq(
-          ActionParam(PROJECT_KEY_PARAM, ValueType.STRING, Some(new Value(""))),
-          ActionParam(QUERY_PARAM, ValueType.STRING)
+          ActionParam(QUERY_PARAM, ValueType.STRING),
+          ActionParam(FIELDS_PARAM, ValueType.STRING, Some(new Value(""))),
+          ActionParam(LIMIT_PARAM, ValueType.STRING, Some(new Value(10))),
+          ActionParam(OFFSET_PARAM, ValueType.STRING, Some(new Value(0)))
       )) { actionData =>
         val map = actionData.dataMap
 
-        jiraKeyParam(map)(PROJECT_KEY_PARAM) flatMap { key =>
-          stringParam(map)(QUERY_PARAM) map { query =>
-            (key, query)
+        stringParam(map)(QUERY_PARAM) map { query =>
+          val fields = stringParam(map)(FIELDS_PARAM) map {
+            _.split(",").toSeq.filter(!_.isEmpty)
+          } filter {
+            !_.isEmpty
           }
+          
+          val limit = numberParam(map)(LIMIT_PARAM) map { _.intValue }
+          val offset = numberParam(map)(OFFSET_PARAM) map { _.intValue }
+          
+          JiraQuery(query, fields, limit, offset)
         } match {
-          case Some((key, query)) => client.map(c => c.findIssues(JiraQuery(key, query)))
+          case Some(query) => client.map(c => c.findIssues(query)) // TODO: supply the result
           case None => {
-            val message = "Missing a required parameter."
+            val message = "Query is required."
             logger.warn(message)
             throw new IllegalArgumentException(message)
           }

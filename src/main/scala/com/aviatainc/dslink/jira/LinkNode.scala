@@ -32,7 +32,14 @@ trait LinkNode {
    * Extract a String from a parameter map if it exists.
    */
   protected def stringParam(map: Map[String, ActionParam])(param: String): Option[String] = {
-    map(param).value.map(_.getString)
+    Option(map(param)).flatMap(_.value).flatMap(v => Option(v.getString))
+  }
+  
+  /**
+   * Extract a Number from a parameter map if it exists.
+   */
+  protected def numberParam(map: Map[String, ActionParam])(param: String): Option[Number] = {
+    Option(map(param)).flatMap(_.value).flatMap(v => Option(v.getNumber))
   }
   
   /**
