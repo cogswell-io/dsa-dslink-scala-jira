@@ -4,10 +4,10 @@
 /project/project/
 /project/target/
 /target/
+/artifacts/
+/bin/
+
 /.classpath
 /.settings/
-/artifacts/
 /.cache-*
-/bin/com
-/bin/io
-/bin/*.class
+/.project

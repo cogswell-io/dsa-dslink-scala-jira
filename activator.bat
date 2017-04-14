@@ -1,0 +1,1 @@
+lightbend/activator.bat
